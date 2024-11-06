@@ -1,119 +1,95 @@
-.md
+## Real-time Currency Conversion Tool
 
-# Real-time Currency Converter with Historical Data
+A Python-based tool for real-time currency conversion with historical data visualization.
 
-A Python-based currency conversion tool that provides real-time exchange rates and historical data capabilities.
+### Features
+- ✅ Real-time currency conversion
+- ✅ Live exchange rates display
+- ✅ Historical exchange rate data (up to 1 year)
+- ✅ Interactive charts for historical trends
+- ✅ Support for 150+ currencies
+- ✅ Simple command-line interface
 
-## Features
+### Installation
 
-- **Real-time Conversion**: Get current exchange rates for 24+ major currencies
-- **Historical Data**: Access historical exchange rates (simulated for free tier)
-- **Command-line Interface**: Easy-to-use CLI for quick conversions
-- **Interactive Mode**: User-friendly interactive session
-- **Conversion History**: Track your recent conversions
-- **Multiple Output Formats**: Full details or exchange rate only
+1. **Clone or download the files** to your local directory
 
-## Installation
-
-1. Ensure you have Python 3.6+ installed
-2. Install required dependencies:
+2. **Install required dependencies**:
    ```bash
    pip install -r requirements.txt
    ```
 
-## Usage
+### Usage
 
-### Command Line Interface
+1. **Run the main application**:
+   ```bash
+   python main.py
+   ```
 
-**Basic Conversion:**
-```bash
-python cli_interface.py 100 USD EUR
-```
+2. **Or run the converter directly**:
+   ```bash
+   python currency_converter.py
+   ```
 
-**Historical Conversion:**
-```bash
-python cli_interface.py 100 USD EUR --date 2024-01-15
-```
+3. **Test the functionality**:
+   ```bash
+   python test_converter.py
+   ```
 
-**Exchange Rate Only:**
-```bash
-python cli_interface.py 1 USD EUR --rate
-```
+### How to Use
 
-**List Supported Currencies:**
-```bash
-python cli_interface.py --list-currencies
-```
+1. **Convert Currency**:
+   - Select option 1 from the menu
+   - Enter amount, source currency, and target currency
+   - Get instant conversion with current exchange rate
 
-**Show Conversion History:**
-```bash
-python cli_interface.py --history
-```
+2. **View Real-time Rates**:
+   - Select option 2
+   - Choose a base currency
+   - See current exchange rates for major currencies
 
-**Interactive Mode:**
-```bash
-python cli_interface.py
-```
+3. **View Historical Rates**:
+   - Select option 3
+   - Enter base and target currencies
+   - Specify number of days for historical data
+   - View data table and interactive chart
 
-### Python API
+### Supported Currencies
+The tool supports all major currencies including:
+- USD (US Dollar)
+- EUR (Euro)
+- GBP (British Pound)
+- JPY (Japanese Yen)
+- CAD (Canadian Dollar)
+- AUD (Australian Dollar)
+- CHF (Swiss Franc)
+- CNY (Chinese Yuan)
+- INR (Indian Rupee)
+- And 150+ more...
 
-```python
-from currency_converter import CurrencyConverter
+### API Information
+- Uses free APIs from exchangerate-api.com and exchangerate.host
+- No API key required for basic usage
+- Real-time data updates every 24 hours
+- Historical data available for up to 1 year
 
-# Initialize converter
-converter = CurrencyConverter()
-
-# Real-time conversion
-result = converter.convert(100, 'USD', 'EUR')
-print(f"${result['original_amount']} USD = {result['converted_amount']} EUR")
-
-# Historical conversion
-historical_result = converter.convert(100, 'USD', 'EUR', '2024-01-15')
-
-# Get exchange rate only
-rate = converter.get_exchange_rate('USD', 'GBP')
-```
-
-### Demo
-
-Run the demo to see all features:
-```bash
-python demo.py
-```
-
-## Supported Currencies
-
-The tool supports 24 major currencies including:
-USD, EUR, GBP, JPY, CAD, AUD, CHF, CNY, INR, SGD, NZD, MXN, BRL, RUB, ZAR, KRW, TRY, AED, SAR, HKD, SEK, NOK, DKK, PLN
-
-## API Limitations
-
-- **Free Tier**: Uses ExchangeRate-API free tier with rate limitations
-- **Historical Data**: Simulated for free tier (real historical data requires premium API)
-- **Real-time Updates**: Rates are cached for 5 minutes to respect API limits
-
-## File Structure
-
-- `currency_api.py` - API client for fetching exchange rates
-- `currency_converter.py` - Main conversion logic and history tracking
-- `cli_interface.py` - Command-line interface
-- `demo.py` - Demonstration script
+### File Structure
+- `currency_api.py` - Core API functions for fetching data
+- `currency_converter.py` - Main application with user interface
+- `main.py` - Application entry point
+- `test_converter.py` - Testing script
 - `requirements.txt` - Python dependencies
 
-## Error Handling
+### Requirements
+- Python 3.6+
+- requests library
+- matplotlib (for charts)
+- pandas (for data handling)
 
-- Network errors are caught and reported
-- Invalid currency codes are handled gracefully
-- Invalid dates are validated
-- API rate limits are respected with caching
+### Notes
+- Internet connection required for real-time data
+- Historical charts require matplotlib
+- Free API has rate limits - be respectful with requests
+- For production use, consider using paid API services
 
-## Extending the Tool
-
-To add premium features:
-1. Get an API key from ExchangeRate-API or similar service
-2. Pass the API key when initializing `CurrencyConverter`
-3. Modify `currency_api.py` to use premium endpoints for historical data
-
-## License
-
-This is a demo project for educational purposes.
+Enjoy converting currencies! 💱
