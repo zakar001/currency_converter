@@ -1,154 +1,204 @@
 """
-Main currency converter application with user interface
+Main currency converter module with real-time conversion and historical data
 """
 
-from currency_api import CurrencyAPI
-import matplotlib.pyplot as plt
-import pandas as pd
-from datetime import datetime
+import requests
+import json
+from datetime import datetime, timedelta
+import sqlite3
+from typing import Optional, Dict, List
+import time
 
 class CurrencyConverter:
-    def __init__(self):
-        self.api = CurrencyAPI()
-        self.common_currencies = ['USD', 'EUR', 'GBP', 'JPY', 'CAD', 'AUD', 'CHF', 'CNY', 'INR']
-    
-    def display_main_menu(self):
-        """Display the main menu options"""
-        print("\n" + "="*50)
-        print("      REAL-TIME CURRENCY CONVERTER")
-        print("="*50)
-        print("1. Convert Currency")
-        print("2. View Real-time Exchange Rates")
-        print("3. View Historical Exchange Rates")
-        print("4. Exit")
-        print("="*50)
-    
-    def convert_currency_interactive(self):
-        """Interactive currency conversion"""
-        try:
-            amount = float(input("Enter amount to convert: "))
-            from_curr = input("Enter source currency (e.g., USD): ").upper()
-            to_curr = input("Enter target currency (e.g., EUR): ").upper()
-            
-            print(f"\nConverting {amount} {from_curr} to {to_curr}...")
-            result = self.api.convert_currency(amount, from_curr, to_curr)
-            
-            if result['success']:
-                print(f"\n✓ Conversion Successful!")
-                print(f"  {amount} {from_curr} = {result['converted_amount']:.2f} {to_curr}")
-                print(f"  Exchange Rate: 1 {from_curr} = {result['exchange_rate']:.4f} {to_curr}")
-                print(f"  Last updated: {datetime.fromtimestamp(result['timestamp'])}")
-            else:
-                print(f"✗ Error: {result['error']}")
-                
-        except ValueError:
-            print("✗ Error: Please enter a valid number for amount")
-        except Exception as e:
-            print(f"✗ Error: {e}")
-    
-    def view_real_time_rates(self):
-        """Display real-time exchange rates"""
-        base_currency = input("Enter base currency (default: USD): ").upper() or "USD"
+    def __init__(self, api_key: str = None):
+        """
+        Initialize currency converter with API key for real-time rates
+        """
+        self.api_key = api_key
+        self.base_url = "https://api.exchangerate.host"
+        self.db_connection = self._init_database()
         
-        print(f"\nFetching real-time rates for {base_currency}...")
-        result = self.api.get_real_time_rates(base_currency)
+    def _init_database(self) -> sqlite3.Connection:
+        """Initialize SQLite database for caching rates"""
+        conn = sqlite3.connect('currency_data.db')
+        cursor = conn.cursor()
         
-        if result['success']:
-            print(f"\n📊 Real-time Exchange Rates (Base: {base_currency})")
-            print("-" * 40)
-            
-            # Display common currencies first
-            for currency in self.common_currencies:
-                if currency != base_currency and currency in result['rates']:
-                    rate = result['rates'][currency]
-                    print(f"  {currency}: {rate:.4f}")
-            
-            print(f"\nLast updated: {datetime.fromtimestamp(result['timestamp'])}")
-        else:
-            print(f"✗ Error: {result['error']}")
-    
-    def view_historical_rates(self):
-        """Display and plot historical exchange rates"""
-        try:
-            base_currency = input("Enter base currency (e.g., USD): ").upper()
-            target_currency = input("Enter target currency (e.g., EUR): ").upper()
-            days = int(input("Enter number of days for history (max 365): ") or "30")
-            days = min(days, 365)  # Limit to 1 year
-            
-            print(f"\nFetching historical data for {days} days...")
-            historical_data = self.api.get_historical_rates(base_currency, target_currency, days)
-            
-            if historical_data:
-                # Display recent rates
-                print(f"\n📈 Historical Exchange Rates ({base_currency} to {target_currency})")
-                print("-" * 50)
-                
-                # Show last 10 days
-                for i, data in enumerate(historical_data[:10]):
-                    print(f"  {data['date']}: 1 {base_currency} = {data['rate']:.4f} {target_currency}")
-                
-                if len(historical_data) > 10:
-                    print(f"  ... and {len(historical_data) - 10} more days")
-                
-                # Plot the data
-                self.plot_historical_data(historical_data, base_currency, target_currency)
-                
-            else:
-                print("✗ No historical data available")
-                
-        except ValueError:
-            print("✗ Error: Please enter valid numbers")
-        except Exception as e:
-            print(f"✗ Error: {e}")
-    
-    def plot_historical_data(self, historical_data, base_currency, target_currency):
-        """Plot historical exchange rate data"""
-        try:
-            # Prepare data for plotting
-            dates = [data['date'] for data in historical_data]
-            rates = [data['rate'] for data in historical_data]
-            
-            # Reverse to show chronological order
-            dates.reverse()
-            rates.reverse()
-            
-            plt.figure(figsize=(12, 6))
-            plt.plot(dates, rates, marker='o', linewidth=2, markersize=4)
-            plt.title(f'Historical Exchange Rate: {base_currency} to {target_currency}')
-            plt.xlabel('Date')
-            plt.ylabel(f'Exchange Rate ({target_currency})')
-            plt.xticks(rotation=45)
-            plt.grid(True, alpha=0.3)
-            plt.tight_layout()
-            plt.show()
-            
-        except ImportError:
-            print("Note: matplotlib not available. Install with: pip install matplotlib")
-        except Exception as e:
-            print(f"Could not display chart: {e}")
-    
-    def run(self):
-        """Main application loop"""
-        print("Welcome to Real-time Currency Converter!")
+        # Create table for historical rates
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS exchange_rates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                base_currency TEXT NOT NULL,
+                target_currency TEXT NOT NULL,
+                rate REAL NOT NULL,
+                date TEXT NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
         
-        while True:
-            self.display_main_menu()
-            choice = input("\nEnter your choice (1-4): ").strip()
+        # Create table for conversion history
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS conversion_history (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                amount REAL NOT NULL,
+                from_currency TEXT NOT NULL,
+                to_currency TEXT NOT NULL,
+                converted_amount REAL NOT NULL,
+                rate REAL NOT NULL,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
+        
+        conn.commit()
+        return conn
+    
+    def get_real_time_rate(self, from_currency: str, to_currency: str) -> Optional[float]:
+        """
+        Get real-time exchange rate using exchangerate.host API
+        """
+        try:
+            url = f"{self.base_url}/latest"
+            params = {
+                'base': from_currency.upper(),
+                'symbols': to_currency.upper()
+            }
             
-            if choice == '1':
-                self.convert_currency_interactive()
-            elif choice == '2':
-                self.view_real_time_rates()
-            elif choice == '3':
-                self.view_historical_rates()
-            elif choice == '4':
-                print("Thank you for using Currency Converter. Goodbye!")
-                break
-            else:
-                print("✗ Invalid choice. Please enter 1-4.")
+            response = requests.get(url, params=params, timeout=10)
+            response.raise_for_status()
             
-            input("\nPress Enter to continue...")
-
-if __name__ == "__main__":
-    converter = CurrencyConverter()
-    converter.run()
+            data = response.json()
+            
+            if data.get('success', False):
+                rate = data['rates'].get(to_currency.upper())
+                if rate:
+                    self._cache_rate(from_currency, to_currency, rate)
+                    return rate
+            
+            return None
+            
+        except requests.RequestException as e:
+            print(f"Error fetching real-time rate: {e}")
+            return self._get_cached_rate(from_currency, to_currency)
+    
+    def _cache_rate(self, base_currency: str, target_currency: str, rate: float):
+        """Cache the exchange rate in database"""
+        cursor = self.db_connection.cursor()
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        cursor.execute('''
+            INSERT OR REPLACE INTO exchange_rates 
+            (base_currency, target_currency, rate, date)
+            VALUES (?, ?, ?, ?)
+        ''', (base_currency.upper(), target_currency.upper(), rate, today))
+        
+        self.db_connection.commit()
+    
+    def _get_cached_rate(self, base_currency: str, target_currency: str) -> Optional[float]:
+        """Get cached exchange rate from database"""
+        cursor = self.db_connection.cursor()
+        today = datetime.now().strftime('%Y-%m-%d')
+        
+        cursor.execute('''
+            SELECT rate FROM exchange_rates 
+            WHERE base_currency = ? AND target_currency = ? AND date = ?
+            ORDER BY timestamp DESC LIMIT 1
+        ''', (base_currency.upper(), target_currency.upper(), today))
+        
+        result = cursor.fetchone()
+        return result[0] if result else None
+    
+    def convert_currency(self, amount: float, from_currency: str, to_currency: str) -> Optional[float]:
+        """
+        Convert currency amount from one currency to another
+        """
+        rate = self.get_real_time_rate(from_currency, to_currency)
+        
+        if rate is None:
+            print(f"Could not get exchange rate for {from_currency} to {to_currency}")
+            return None
+        
+        converted_amount = amount * rate
+        
+        # Save conversion to history
+        self._save_conversion_history(amount, from_currency, to_currency, converted_amount, rate)
+        
+        return converted_amount
+    
+    def _save_conversion_history(self, amount: float, from_currency: str, to_currency: str, 
+                               converted_amount: float, rate: float):
+        """Save conversion to history table"""
+        cursor = self.db_connection.cursor()
+        
+        cursor.execute('''
+            INSERT INTO conversion_history 
+            (amount, from_currency, to_currency, converted_amount, rate)
+            VALUES (?, ?, ?, ?, ?)
+        ''', (amount, from_currency.upper(), to_currency.upper(), converted_amount, rate))
+        
+        self.db_connection.commit()
+    
+    def get_historical_rates(self, base_currency: str, target_currency: str, 
+                           days: int = 30) -> List[Dict]:
+        """
+        Get historical exchange rates for the specified period
+        """
+        historical_data = []
+        
+        for i in range(days):
+            date = (datetime.now() - timedelta(days=i)).strftime('%Y-%m-%d')
+            
+            try:
+                url = f"{self.base_url}/{date}"
+                params = {
+                    'base': base_currency.upper(),
+                    'symbols': target_currency.upper()
+                }
+                
+                response = requests.get(url, params=params, timeout=10)
+                response.raise_for_status()
+                
+                data = response.json()
+                
+                if data.get('success', False):
+                    rate = data['rates'].get(target_currency.upper())
+                    if rate:
+                        historical_data.append({
+                            'date': date,
+                            'rate': rate
+                        })
+                        
+                time.sleep(0.1)  # Rate limiting
+                
+            except requests.RequestException as e:
+                print(f"Error fetching historical data for {date}: {e}")
+                continue
+        
+        return historical_data
+    
+    def get_conversion_history(self, limit: int = 10) -> List[Dict]:
+        """Get recent conversion history"""
+        cursor = self.db_connection.cursor()
+        
+        cursor.execute('''
+            SELECT amount, from_currency, to_currency, converted_amount, rate, timestamp
+            FROM conversion_history 
+            ORDER BY timestamp DESC 
+            LIMIT ?
+        ''', (limit,))
+        
+        history = []
+        for row in cursor.fetchall():
+            history.append({
+                'amount': row[0],
+                'from_currency': row[1],
+                'to_currency': row[2],
+                'converted_amount': row[3],
+                'rate': row[4],
+                'timestamp': row[5]
+            })
+        
+        return history
+    
+    def close(self):
+        """Close database connection"""
+        if self.db_connection:
+            self.db_connection.close()
