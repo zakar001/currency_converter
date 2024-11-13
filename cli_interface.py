@@ -1,118 +1,66 @@
 """
-Command-line interface for the currency converter tool.
+Command-line interface for the currency converter
 """
 
-from currency_converter import CurrencyConverter
 import argparse
+from currency_converter import CurrencyConverter
+from datetime import datetime
 import sys
-from datetime import datetime, timedelta
-
-def print_conversion_result(result):
-    """Print conversion result in a formatted way."""
-    if not result:
-        print("Conversion failed. Please check your inputs.")
-        return
-    
-    print("\n" + "="*50)
-    print(f"CONVERSION RESULT")
-    print("="*50)
-    print(f"Amount: {result['original_amount']} {result['from_currency']}")
-    print(f"Converted: {result['converted_amount']} {result['to_currency']}")
-    print(f"Exchange Rate: 1 {result['from_currency']} = {result['exchange_rate']} {result['to_currency']}")
-    print(f"Type: {result['conversion_type'].upper()}")
-    print(f"Date: {result['rate_date']}")
-    print("="*50)
 
 def main():
-    """Main CLI function."""
-    parser = argparse.ArgumentParser(description='Real-time Currency Converter with Historical Data')
-    
-    # Main conversion arguments
-    parser.add_argument('amount', type=float, nargs='?', help='Amount to convert')
-    parser.add_argument('from_currency', type=str.upper, nargs='?', help='Source currency code')
-    parser.add_argument('to_currency', type=str.upper, nargs='?', help='Target currency code')
-    
-    # Optional arguments
-    parser.add_argument('--date', '-d', type=str, help='Historical date (YYYY-MM-DD)')
-    parser.add_argument('--list-currencies', '-l', action='store_true', help='List supported currencies')
-    parser.add_argument('--history', '-H', action='store_true', help='Show conversion history')
-    parser.add_argument('--rate', '-r', action='store_true', help='Show exchange rate only')
-    parser.add_argument('--clear-history', '-c', action='store_true', help='Clear conversion history')
+    parser = argparse.ArgumentParser(description='Real-time Currency Converter')
+    parser.add_argument('--amount', type=float, required=True, help='Amount to convert')
+    parser.add_argument('--from', dest='from_currency', required=True, help='Source currency code (e.g., USD)')
+    parser.add_argument('--to', dest='to_currency', required=True, help='Target currency code (e.g., EUR)')
+    parser.add_argument('--historical', action='store_true', help='Show historical data (last 30 days)')
+    parser.add_argument('--history', action='store_true', help='Show conversion history')
     
     args = parser.parse_args()
     
     converter = CurrencyConverter()
     
-    # List currencies
-    if args.list_currencies:
-        currencies = converter.get_currency_list()
-        print("\nSupported Currencies:")
-        print(", ".join(currencies))
-        return
-    
-    # Show history
-    if args.history:
-        history = converter.get_conversion_history()
-        if not history:
-            print("No conversion history available.")
+    try:
+        if args.history:
+            # Show conversion history
+            history = converter.get_conversion_history(10)
+            print("\n=== Conversion History ===")
+            for entry in history:
+                print(f"{entry['timestamp']}: {entry['amount']} {entry['from_currency']} -> "
+                      f"{entry['converted_amount']:.2f} {entry['to_currency']} (Rate: {entry['rate']:.4f})")
             return
         
-        print("\nConversion History:")
-        print("-" * 60)
-        for i, record in enumerate(reversed(history), 1):
-            print(f"{i}. {record['original_amount']} {record['from_currency']} -> "
-                  f"{record['converted_amount']} {record['to_currency']} "
-                  f"(Rate: {record['exchange_rate']}, {record['rate_date']})")
-        return
-    
-    # Clear history
-    if args.clear_history:
-        converter.clear_history()
-        print("Conversion history cleared.")
-        return
-    
-    # Interactive mode if no arguments provided
-    if not args.amount or not args.from_currency or not args.to_currency:
-        print("Currency Converter - Interactive Mode")
-        print("Enter 'quit' to exit\n")
+        # Perform conversion
+        result = converter.convert_currency(args.amount, args.from_currency, args.to_currency)
         
-        while True:
-            try:
-                amount = input("Enter amount to convert: ").strip()
-                if amount.lower() == 'quit':
-                    break
-                
-                from_curr = input("From currency (e.g., USD): ").strip().upper()
-                if from_curr.lower() == 'quit':
-                    break
-                
-                to_curr = input("To currency (e.g., EUR): ").strip().upper()
-                if to_curr.lower() == 'quit':
-                    break
-                
-                date_input = input("Historical date (YYYY-MM-DD) or Enter for real-time: ").strip()
-                date = date_input if date_input else None
-                
-                result = converter.convert(float(amount), from_curr, to_curr, date)
-                print_conversion_result(result)
-                print()
-                
-            except ValueError:
-                print("Invalid input. Please enter numeric amount.")
-            except KeyboardInterrupt:
-                print("\nGoodbye!")
-                break
-    else:
-        # Command-line mode
-        result = converter.convert(args.amount, args.from_currency, args.to_currency, args.date)
-        
-        if args.rate:
-            if result:
-                print(result['exchange_rate'])
-            else:
-                print("Failed to get exchange rate")
+        if result is not None:
+            print(f"\n💰 Conversion Result:")
+            print(f"{args.amount} {args.from_currency.upper()} = {result:.2f} {args.to_currency.upper()}")
+            
+            # Get current rate for display
+            current_rate = converter.get_real_time_rate(args.from_currency, args.to_currency)
+            if current_rate:
+                print(f"Current Exchange Rate: 1 {args.from_currency.upper()} = {current_rate:.4f} {args.to_currency.upper()}")
         else:
-            print_conversion_result(result)
+            print("Error: Could not perform conversion. Please check currency codes.")
+            sys.exit(1)
+        
+        if args.historical:
+            # Show historical data
+            print(f"\n📊 Historical Rates (Last 30 days) for {args.from_currency.upper()} to {args.to_currency.upper()}:")
+            historical_data = converter.get_historical_rates(args.from_currency, args.to_currency)
+            
+            for data in historical_data[:10]:  # Show first 10 entries
+                print(f"  {data['date']}: {data['rate']:.4f}")
+            
+            if len(historical_data) > 10:
+                print(f"  ... and {len(historical_data) - 10} more days")
+    
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user")
+    except Exception as e:
+        print(f"An error occurred: {e}")
+    finally:
+        converter.close()
 
 if __name__ == "__main__":
     main()
